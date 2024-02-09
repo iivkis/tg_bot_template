@@ -1,0 +1,58 @@
+version: '3'
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # postgres database
+  db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_DB: $DB_NAME
+      POSTGRES_USER: $DB_USER
+      POSTGRES_PASSWORD: $DB_PASSWORD
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "pg_isready",
+          "-U",
+          "$DB_USER",
+          "-d",
+          "$DB_NAME"
+        ]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+
+  adminer:
+    image: adminer
+    ports:
+      - 8080:8080
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # database migration
+  migrate:
+    image: migrate/migrate
+    volumes:
+      - ./migration:/migration
+    command: -source file://migration -database $MIGRATE_DATABASE up
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # redis database
+  redis:
+    image: redis
+    restart: always
